@@ -25,6 +25,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static br.com.fiap.techchallenge.oficina.billing.suporte.Fakes.AGORA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,6 +44,7 @@ class MercadoPagoGatewayTest {
     private final Map<String, String> recebidos = new ConcurrentHashMap<>();
     private final Map<String, String> cabecalhos = new ConcurrentHashMap<>();
     private HttpServer servidor;
+    private URI base;
     private MercadoPagoGateway gateway;
     private Orcamento orcamento;
 
@@ -49,7 +53,7 @@ class MercadoPagoGatewayTest {
         servidor = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         servidor.createContext("/", this::responder);
         servidor.start();
-        URI base = URI.create("http://127.0.0.1:" + servidor.getAddress().getPort());
+        base = URI.create("http://127.0.0.1:" + servidor.getAddress().getPort());
         gateway = new MercadoPagoGateway(HttpClient.newHttpClient(), json, base, "TEST-token",
                 "https://billing.test/webhooks/mercadopago", "https://oficina.test/status", true);
         orcamento = Orcamento.gerar(OrdemServicoId.novo(), new Orcamento.Cliente("c", "Alice", "alice@exemplo.com"),
@@ -152,5 +156,41 @@ class MercadoPagoGatewayTest {
         servidor.stop(0);
         assertThrows(ProvedorPagamentoGateway.FalhaProvedorException.class,
                 () -> gateway.criarCobranca(orcamento, AGORA));
+    }
+
+    @Test
+    void preferenciaMinimaComCredencialDeProducao() throws IOException {
+        var producao = new MercadoPagoGateway(HttpClient.newHttpClient(), json, base, "APP_USR-token", null, " ", false);
+        var semEmail = Orcamento.gerar(OrdemServicoId.novo(), new Orcamento.Cliente("c", "Bia", null),
+                List.of(new Orcamento.Item("SERVICO", "s1", "Alinhamento", 1, Dinheiro.de("120.00"))), AGORA);
+        respostas.put("POST /checkout/preferences", """
+                {"id": "pref-2", "init_point": "https://mp/prod", "sandbox_init_point": "https://mp/sandbox"}""");
+
+        assertEquals("https://mp/prod", producao.criarCobranca(semEmail, AGORA.plusMinutes(30)).link());
+
+        JsonNode enviado = json.readTree(recebidos.get("POST /checkout/preferences"));
+        assertFalse(enviado.has("payer"), "sem e-mail não manda pagador");
+        assertFalse(enviado.has("notification_url"), "sem rota pública: só a consulta periódica");
+        assertFalse(enviado.has("back_urls"));
+    }
+
+    @Test
+    void semClienteESemLinkDeSandboxUsaOLinkPrincipal() {
+        var semCliente = Orcamento.gerar(OrdemServicoId.novo(), null,
+                List.of(new Orcamento.Item("PECA", "p1", "Pastilha", 1, Dinheiro.de("95.00"))), AGORA);
+        respostas.put("POST /checkout/preferences", "{\"id\": \"pref-3\", \"init_point\": \"https://mp/prod\"}");
+
+        assertEquals("https://mp/prod", gateway.criarCobranca(semCliente, AGORA.plusMinutes(30)).link());
+    }
+
+    @Test
+    void pagamentoSemDatasNemValor() {
+        respostas.put("GET /v1/payments/79", "{\"id\": 79, \"status\": \"authorized\", \"transaction_amount\": null}");
+
+        SituacaoPagamento s = gateway.consultarPagamento("79").orElseThrow();
+
+        assertEquals(SituacaoPagamento.Situacao.PENDENTE, s.situacao());
+        assertNull(s.valor());
+        assertNotNull(s.quando(), "sem data do provedor, vale o momento da consulta");
     }
 }

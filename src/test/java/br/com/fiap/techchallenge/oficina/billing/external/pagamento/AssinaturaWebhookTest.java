@@ -39,5 +39,14 @@ class AssinaturaWebhookTest {
         assertFalse(AssinaturaWebhook.valida(SEGREDO, "v1=abc", "req-1", "123"), "sem ts");
         assertFalse(AssinaturaWebhook.valida(SEGREDO, null, "req-1", "123"));
         assertFalse(AssinaturaWebhook.valida("", assinatura, "req-1", "123"), "sem segredo configurado: fecha");
+        assertFalse(AssinaturaWebhook.valida(null, assinatura, "req-1", "123"));
+    }
+
+    @Test
+    void ignoraPartesMalformadasOuDesconhecidasDoCabecalho() {
+        String hmac = AssinaturaWebhook.hmac(SEGREDO, "id:123;request-id:req-1;ts:1700000000;");
+        assertTrue(AssinaturaWebhook.valida(SEGREDO, "lixo,versao=2,ts=1700000000,v1=" + hmac, "req-1", "123"),
+                "partes sem '=' e chaves desconhecidas não atrapalham");
+        assertFalse(AssinaturaWebhook.valida(SEGREDO, "ts,v1", "req-1", "123"), "chaves sem valor");
     }
 }
