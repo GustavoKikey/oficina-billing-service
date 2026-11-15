@@ -6,9 +6,31 @@ no **Mercado Pago**, confirma o pagamento e faz o **estorno** quando a saga prec
 desfazer uma cobrança. É o serviço com banco **NoSQL** (DynamoDB) do sistema e é
 participante da saga orquestrada pelo OS Service.
 
-> **Situação: esqueleto (etapa 2 de 5).** Projeto, configuração, mensageria, health
-> check do DynamoDB, CI, manifestos e ambiente local estão prontos e testados. O
-> domínio e a integração com o Mercado Pago entram na etapa 3.
+> **Situação: domínio e participação na saga implementados (etapa 3 de 5).** Deploy no
+> EKS, tabela via Terraform e README final entram na etapa 5.
+
+## O que este serviço faz
+
+| Comando da saga | O que acontece | Resposta |
+| --- | --- | --- |
+| `GerarOrcamento` | Calcula o valor a partir dos itens do diagnóstico | `OrcamentoGerado` ou `OrcamentoNaoGerado` |
+| `SolicitarPagamento` | Cliente aprovou: cria a cobrança no Mercado Pago (Checkout Pro) | `PagamentoSolicitado` (com o link) |
+| — (consulta periódica / webhook) | Confere o pagamento **na API** do provedor | `PagamentoConfirmado`, `PagamentoRecusado` ou `PagamentoExpirado` |
+| `CancelarOrcamento` (compensação) | Cancela; se já foi pago, estorna | `OrcamentoCancelado` |
+| `EstornarPagamento` (compensação) | Estorno total, com retentativa | `PagamentoEstornado` ou `EstornoFalhou` |
+
+Garantias: idempotência pela chave de negócio (um orçamento por OS), estado e evento
+gravados juntos (`TransactWriteItems`), e **orçamento cancelado nunca fica com dinheiro**
+(pagamento aprovado depois do cancelamento é estornado automaticamente).
+
+### Provedor de pagamento
+
+| `PAGAMENTO_PROVEDOR` | Uso |
+| --- | --- |
+| `simulado` (padrão) | Sem credenciais: o link aponta para `/simulador/checkout/{orcamentoId}` e o pagamento é aprovado ou recusado com `POST /simulador/pagamentos/{orcamentoId}?resultado=aprovado\|recusado`. Ambiente local, testes e ensaio. |
+| `mercadopago` | Mercado Pago real (sandbox): `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET` e, se houver URL pública, `MP_NOTIFICATION_URL`. |
+
+O fluxo depois da cobrança (consulta periódica, eventos, estorno) é o mesmo código nos dois.
 
 ---
 
