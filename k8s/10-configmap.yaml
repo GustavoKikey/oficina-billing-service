@@ -1,0 +1,24 @@
+# Configuração não sensível do Billing Service. Segredos (banco, RabbitMQ, New Relic,
+# chaves JWT) ficam em Secrets criados pelo pipeline de CD — nunca no repositório.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-billing-config
+  namespace: oficina
+  labels:
+    app.kubernetes.io/name: oficina-billing
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: oficina
+data:
+  AMBIENTE: "prod"
+  JAVA_OPTS: "-XX:MaxRAMPercentage=50.0"
+  RABBITMQ_HOST: "rabbitmq.oficina.svc.cluster.local"
+  RABBITMQ_PORT: "5672"
+  MP_JWT_VERIFY_PUBLICKEY_LOCATION: "/etc/oficina/jwt/publicKey.pem"
+  AWS_REGION: "us-east-1"
+  # Placeholder: o CD substitui pelo nome real, lido do SSM
+  # (/oficina/<ambiente>/billing/dynamodb/tabela).
+  DYNAMODB_TABELA: "oficina-billing-prod"
+  # Telemetria: o CD liga o SDK (OTEL_SDK_DISABLED=false) quando há license key.
+  OTLP_ENDPOINT: "https://otlp.nr-data.net:4318"
+  OTEL_SDK_DISABLED: "true"
