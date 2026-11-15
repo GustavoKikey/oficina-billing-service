@@ -152,6 +152,13 @@ class MercadoPagoGatewayTest {
         var erro = assertThrows(ProvedorPagamentoGateway.FalhaProvedorException.class,
                 () -> gateway.estornar("12", "k"));
         assertTrue(erro.getMessage().contains("503"));
+        assertTrue(erro.getMessage().endsWith(": indisponível"), "só o 'message' do corpo: " + erro.getMessage());
+
+        status.put("POST /v1/payments/13/refunds", 502);
+        respostas.put("POST /v1/payments/13/refunds", "<html>" + "x".repeat(500) + "</html>");
+        var semJson = assertThrows(ProvedorPagamentoGateway.FalhaProvedorException.class,
+                () -> gateway.estornar("13", "k"));
+        assertTrue(semJson.getMessage().length() < 300, "corpo que não é JSON vai truncado");
 
         servidor.stop(0);
         assertThrows(ProvedorPagamentoGateway.FalhaProvedorException.class,
