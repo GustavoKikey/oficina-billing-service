@@ -108,8 +108,10 @@ public class RelayOutbox {
                 .withContentType("application/json")
                 .withDeliveryMode(2)
                 .build();
+        // O conector cria o span de publicação como filho do contexto *corrente* do
+        // metadado (withCurrent): é o que costura este publish no trace original.
         emissor.sendMessageAndAwait(Message.of(item.get("envelope").s(),
-                Metadata.of(rabbit, TracingMetadata.withPrevious(contexto(item)))));
+                Metadata.of(rabbit, TracingMetadata.withCurrent(contexto(item)))));
     }
 
     private Context contexto(Map<String, AttributeValue> item) {
