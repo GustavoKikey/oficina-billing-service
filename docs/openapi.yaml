@@ -1,0 +1,117 @@
+---
+openapi: 3.1.0
+tags:
+- name: Orçamentos
+  description: Orçamento e pagamento de cada OS
+- name: Simulador de pagamento
+  description: Só no modo simulado (sem credenciais do Mercado Pago)
+- name: Webhooks
+components:
+  schemas:
+    UUID:
+      type: string
+      format: uuid
+      pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
+  securitySchemes:
+    SecurityScheme:
+      description: Authentication
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+paths:
+  /orcamentos/os/{osId}:
+    get:
+      summary: "Orçamento da OS, com a cobrança no Mercado Pago e o histórico do pagamento"
+      tags:
+      - Orçamentos
+      parameters:
+      - name: osId
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/UUID"
+      responses:
+        "404":
+          description: A OS ainda não tem orçamento
+        "401":
+          description: Not Authorized
+        "403":
+          description: Not Allowed
+      security:
+      - SecurityScheme:
+        - ATENDENTE
+        - ADMINISTRADOR
+  /simulador/checkout/{orcamentoId}:
+    get:
+      summary: Página do link de pagamento simulado
+      tags:
+      - Simulador de pagamento
+      parameters:
+      - name: orcamentoId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+  /simulador/pagamentos/{orcamentoId}:
+    post:
+      summary: O cliente paga (aprovado) ou o cartão é recusado
+      tags:
+      - Simulador de pagamento
+      parameters:
+      - name: orcamentoId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: resultado
+        in: query
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /webhooks/mercadopago:
+    post:
+      summary: Notificação do Mercado Pago (assinada) — dispara a consulta do pagamento
+      tags:
+      - Webhooks
+      parameters:
+      - name: data.id
+        in: query
+        schema:
+          type: string
+      - name: type
+        in: query
+        schema:
+          type: string
+      - name: x-request-id
+        in: header
+        schema:
+          type: string
+      - name: x-signature
+        in: header
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {}
+info:
+  title: Oficina — Billing Service
+  version: 1.0.0
+  description: Orçamento e pagamento via Mercado Pago (fase 4).
