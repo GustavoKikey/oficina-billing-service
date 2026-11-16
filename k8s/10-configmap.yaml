@@ -18,7 +18,15 @@ data:
   AWS_REGION: "us-east-1"
   # Placeholder: o CD substitui pelo nome real, lido do SSM
   # (/oficina/<ambiente>/billing/dynamodb/tabela).
-  DYNAMODB_TABELA: "oficina-billing-prod"
+  # Preenchido no deploy a partir do SSM (/oficina/{env}/billing/tabela).
+  DYNAMODB_TABELA: "oficina-billing-hom"
+  # Checkout: "mercadopago" quando há MP_ACCESS_TOKEN; senão o simulado, com
+  # o link apontando para o load balancer público deste serviço (preenchido
+  # no deploy).
+  PAGAMENTO_PROVEDOR: "simulado"
+  SIMULADOR_URL_BASE: "http://localhost:8080"
+  # Credencial de produção de conta de teste: o link é o init_point.
+  MP_LINK_SANDBOX: "false"
   # Telemetria: o CD liga o SDK (OTEL_SDK_DISABLED=false) quando há license key.
   OTLP_ENDPOINT: "https://otlp.nr-data.net:4318"
   OTEL_SDK_DISABLED: "true"
