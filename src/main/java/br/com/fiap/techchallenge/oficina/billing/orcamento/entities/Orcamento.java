@@ -31,8 +31,9 @@ public class Orcamento {
             if (quantidade <= 0) {
                 throw new OrcamentoInvalidoException("Quantidade inválida em '" + descricao + "': " + quantidade);
             }
-            if (valorUnitario == null || valorUnitario.valor().signum() < 0) {
-                throw new OrcamentoInvalidoException("Valor inválido em '" + descricao + "'");
+            // Negativo não chega aqui: Dinheiro não admite (e o use case traduz o texto inválido).
+            if (valorUnitario == null) {
+                throw new OrcamentoInvalidoException("Valor ausente em '" + descricao + "'");
             }
         }
 

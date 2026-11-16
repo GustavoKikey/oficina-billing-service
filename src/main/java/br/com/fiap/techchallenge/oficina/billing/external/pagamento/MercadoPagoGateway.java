@@ -187,8 +187,22 @@ public class MercadoPagoGateway implements ProvedorPagamentoGateway {
     private JsonNode ler(HttpResponse<String> resp, String operacao) throws IOException {
         if (resp.statusCode() / 100 != 2) {
             throw new FalhaProvedorException("Mercado Pago respondeu " + resp.statusCode() + " ao " + operacao
-                    + ": " + resp.body());
+                    + ": " + resumoDoErro(resp.body()));
         }
         return json.readTree(resp.body());
+    }
+
+    /** O "message" do corpo de erro, que é o que interessa no alerta; senão, o começo do corpo. */
+    private String resumoDoErro(String corpo) {
+        try {
+            String mensagem = json.readTree(corpo).path("message").asText("");
+            if (!mensagem.isBlank()) {
+                return mensagem;
+            }
+        } catch (IOException | RuntimeException corpoNaoEhJson) {
+            // segue com o texto cru
+        }
+        String texto = corpo.strip(); // BodyHandlers.ofString() nunca entrega null
+        return texto.length() > 200 ? texto.substring(0, 200) + "…" : texto;
     }
 }
