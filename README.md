@@ -11,7 +11,10 @@ no **Mercado Pago**, confirma o pagamento e faz o **estorno** quando a saga prec
 desfazer uma cobrança. É o serviço com banco **NoSQL** (DynamoDB) do sistema e é
 participante da saga orquestrada pelo OS Service.
 
-> **Situação:** domínio, saga, testes (unitários, integração), CI com SonarCloud e implantação na AWS (Terraform próprio e deploy contínuo no EKS) implementados.
+> **Situação:** implementado e validado na AWS em 2026-11-16 (fluxo completo de uma OS no
+> EKS, com pagamento real no Mercado Pago e saga `CONCLUIDA`).
+>
+> **Checklist da entrega da fase 4** (requisito → onde está) e vídeo: [README do OS Service](https://github.com/GustavoKikey/oficina-os-service#entrega-da-fase-4--onde-está-cada-requisito).
 
 ## O que este serviço faz
 
@@ -32,9 +35,12 @@ gravados juntos (`TransactWriteItems`), e **orçamento cancelado nunca fica com 
 | `PAGAMENTO_PROVEDOR` | Uso |
 | --- | --- |
 | `simulado` (padrão) | Sem credenciais: o link aponta para `/simulador/checkout/{orcamentoId}` e o pagamento é aprovado ou recusado com `POST /simulador/pagamentos/{orcamentoId}?resultado=aprovado\|recusado`. Ambiente local, testes e ensaio. |
-| `mercadopago` | Mercado Pago real (sandbox): `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET` e, se houver URL pública, `MP_NOTIFICATION_URL`. |
+| `mercadopago` | Mercado Pago real com **contas de teste**: `MP_ACCESS_TOKEN` (credencial da conta de teste vendedora), `MP_LINK_SANDBOX=false` (link `init_point`) e, se houver URL pública, `MP_WEBHOOK_SECRET` e `MP_NOTIFICATION_URL`. Na AWS, o deploy liga este modo quando o repositório tem o secret `MP_ACCESS_TOKEN`. **Validado em 2026-11-16** com pagamento real, localmente e no EKS. |
 
 O fluxo depois da cobrança (consulta periódica, eventos, estorno) é o mesmo código nos dois.
+O estorno no Mercado Pago exige que as credenciais de produção da conta de teste estejam
+ativadas no painel; sem isso ele responde 401 e a saga vai para `FALHA` com alerta — o
+comportamento esperado para dinheiro preso ([RFC 004](https://github.com/GustavoKikey/oficina-os-service/blob/main/docs/fase-4/rfc/rfc-004-integracao-mercado-pago.md) §7).
 
 ---
 
@@ -62,7 +68,7 @@ Clean Architecture, como na fase 3: cada módulo de negócio tem `entities` (reg
 ## Stack
 
 Java 21 · Quarkus 3.40 (LTS) · **Amazon DynamoDB** · RabbitMQ (SmallRye Reactive
-Messaging) · REST Client (API do Mercado Pago) · JWT RS256 (só validação) ·
+Messaging) · `HttpClient` do JDK (API do Mercado Pago) · JWT RS256 (só validação) ·
 OpenTelemetry + Micrometer + logs JSON (New Relic) · JUnit 5, REST-Assured,
 Testcontainers · JaCoCo (gate de 80%) · SonarCloud · Docker · Kubernetes (EKS)
 
@@ -101,6 +107,28 @@ O build **falha se a cobertura do serviço ficar abaixo de 80%**.
 | [SonarCloud](https://sonarcloud.io/summary/overall?id=GustavoKikey_oficina-billing-service) | Quality gate da `main` e de cada PR (badges no topo, atualizados a cada análise). Em 2026-11-16: cobertura **91,6%**, 0 bugs, 0 vulnerabilidades, 0 code smells |
 | [Resumo de cada execução do CI](https://github.com/GustavoKikey/oficina-billing-service/actions/workflows/ci.yml) | Tabela de cobertura do JaCoCo (instruções, branches, linhas); relatório completo no artefato `relatorio-jacoco` |
 | Build local | `./mvnw verify` falha abaixo de **80%**; relatório em `target/site/jacoco/index.html` |
+
+## API (Swagger)
+
+Swagger UI em **`/swagger`** (local: http://localhost:8082/swagger; na AWS, pelo load balancer
+público). A especificação OpenAPI exportada do serviço em execução está em
+[`docs/openapi.yaml`](docs/openapi.yaml). O Billing é dirigido pela saga (comandos no RabbitMQ);
+a API é pequena:
+
+| Rota | Quem | O quê |
+| --- | --- | --- |
+| `GET /orcamentos/os/{osId}` | Funcionários | Orçamento da OS, com o pagamento e o histórico dele |
+| `POST /webhooks/mercadopago` | Mercado Pago | Notificação de pagamento (assinatura `x-signature` validada; a decisão vem sempre da consulta à API) |
+| `GET /simulador/checkout/{orcamentoId}` · `POST /simulador/pagamentos/{orcamentoId}` | Ambiente local/testes | Checkout simulado, quando não há credencial do Mercado Pago |
+
+## Observabilidade
+
+A mesma do Tech Challenge da fase 3, o **New Relic**: traces distribuídos por OpenTelemetry
+(OTLP) — cada mensagem publicada continua o trace de quem a originou, então um fluxo aparece
+como um único trace atravessando os três serviços —, métricas Micrometer/Prometheus (pagamentos por resultado, falhas) e
+logs JSON com `traceId` e `correlationId` (= id da OS). Painel e alertas da saga:
+[`newrelic-saga.py`](https://github.com/GustavoKikey/oficina-infra-k8s/blob/main/scripts/newrelic-saga.py).
+Localmente, o Jaeger do docker compose mostra o mesmo trace.
 
 ## Mensageria
 
