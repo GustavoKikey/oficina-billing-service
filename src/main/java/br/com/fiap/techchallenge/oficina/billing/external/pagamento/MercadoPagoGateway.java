@@ -202,7 +202,7 @@ public class MercadoPagoGateway implements ProvedorPagamentoGateway {
         } catch (IOException | RuntimeException corpoNaoEhJson) {
             // segue com o texto cru
         }
-        String texto = corpo == null ? "" : corpo.strip();
+        String texto = corpo.strip(); // BodyHandlers.ofString() nunca entrega null
         return texto.length() > 200 ? texto.substring(0, 200) + "…" : texto;
     }
 }

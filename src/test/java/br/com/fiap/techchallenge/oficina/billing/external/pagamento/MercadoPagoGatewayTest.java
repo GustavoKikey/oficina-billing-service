@@ -160,6 +160,13 @@ class MercadoPagoGatewayTest {
                 () -> gateway.estornar("13", "k"));
         assertTrue(semJson.getMessage().length() < 300, "corpo que não é JSON vai truncado");
 
+        status.put("POST /v1/payments/14/refunds", 400);
+        respostas.put("POST /v1/payments/14/refunds", "{\"error\": \"bad_request\"}");
+        var semMensagem = assertThrows(ProvedorPagamentoGateway.FalhaProvedorException.class,
+                () -> gateway.estornar("14", "k"));
+        assertTrue(semMensagem.getMessage().endsWith(": {\"error\": \"bad_request\"}"),
+                "JSON sem 'message' vai inteiro quando é curto: " + semMensagem.getMessage());
+
         servidor.stop(0);
         assertThrows(ProvedorPagamentoGateway.FalhaProvedorException.class,
                 () -> gateway.criarCobranca(orcamento, AGORA));
